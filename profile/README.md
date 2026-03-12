@@ -62,8 +62,10 @@ dotnet add package Trax.Effect.Data.Postgres  # or Trax.Effect.Data.InMemory
 ```
 
 ```csharp
-builder.Services.AddTraxEffects(options => options
-    .AddPostgresEffect(connectionString)
+builder.Services.AddTrax(trax =>
+    trax.AddEffects(effects =>
+        effects.UsePostgres(connectionString)
+    )
 );
 ```
 
@@ -78,9 +80,11 @@ dotnet add package Trax.Mediator
 ```
 
 ```csharp
-builder.Services.AddTraxEffects(options => options
-    .AddPostgresEffect(connectionString)
-    .AddServiceTrainBus(typeof(Program).Assembly)
+builder.Services.AddTrax(trax =>
+    trax.AddEffects(effects =>
+            effects.UsePostgres(connectionString)
+        )
+        .AddMediator(typeof(Program).Assembly)
 );
 
 // In a controller or another train:
@@ -133,6 +137,7 @@ dotnet new trax-server -n MyApp
 | [Trax.Effect.Data.InMemory](https://github.com/TraxSharp/Trax.Effect) | In-memory storage provider (dev/testing) |
 | [Trax.Mediator](https://github.com/TraxSharp/Trax.Mediator) | `TrainBus` — route inputs to trains by type |
 | [Trax.Scheduler](https://github.com/TraxSharp/Trax.Scheduler) | Manifest-based scheduling, retries, dead-letter handling |
+| [Trax.Api.GraphQL](https://github.com/TraxSharp/Trax.Api) | GraphQL API layer for train operations |
 | [Trax.Dashboard](https://github.com/TraxSharp/Trax.Dashboard) | Blazor Server monitoring UI |
 | [Trax.Samples](https://github.com/TraxSharp/Trax.Samples) | Sample apps and `dotnet new trax-server` template |
 
