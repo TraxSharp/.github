@@ -1,157 +1,185 @@
 # Trax
 
-A framework for readable .NET — build business logic as typed pipelines where each step has one job and errors short-circuit automatically. Start with zero infrastructure, then add execution logging, scheduling, and a monitoring dashboard as you need them.
+Trax structures .NET business logic as typed pipelines. A pipeline is a **train**. Each step is a
+**junction** with one job, a typed input and a typed output. If a junction fails, the train skips
+the remaining junctions and returns the exception, so there is no try/catch between steps.
 
-## The Problem
+Once logic lives in a train, the rest of the framework has something to operate on: the same class
+can be a GraphQL field, a cron job, a Lambda invocation and a row in a dashboard without being
+rewritten for any of them. Each of those is a package on top of the one below. Core on its own
+pulls in no DI container, no database and no ASP.NET.
 
-Most service code is a sequence of steps: validate, transform, persist, notify. But the actual logic gets buried under try/catch blocks, null checks, and scattered side effects.
+Requires .NET 10. Documentation: [traxsharp.net/docs](https://traxsharp.net/docs).
 
-## The Fix
-
-Trax replaces that with a **pipeline** — a typed chain of steps where each step's output feeds the next. If any step fails, the rest are skipped automatically. No try/catch required.
+## A train
 
 ```csharp
-public class CreateUserTrain : Train<CreateUserRequest, User>
+public class ValidateEmailJunction : Junction<CreateUserRequest, ValidatedEmail>
 {
-    protected override async Task<Either<Exception, User>> RunInternal(CreateUserRequest input)
-        => Activate(input)
-            .Chain<ValidateEmailStep>()
-            .Chain<CreateUserInDatabaseStep>()
-            .Chain<SendWelcomeEmailStep>()
+    public override Task<ValidatedEmail> Run(CreateUserRequest input) =>
+        input.Email.Contains('@')
+            ? Task.FromResult(new ValidatedEmail(input.Email))
+            : throw new ValidationException("Invalid email format");
+}
+```
+
+```csharp
+[TraxMutation]
+[TraxAuthorize(Roles = Roles.Admin)]
+public class CreateUserTrain : ServiceTrain<CreateUserRequest, User>, ICreateUserTrain
+{
+    protected override Task<Either<Exception, User>> Junctions() =>
+        Chain<ValidateEmailJunction>()
+            .Chain<CreateUserInDatabaseJunction>()
+            .Chain<SendWelcomeEmailJunction>()
             .Resolve();
 }
 ```
 
-A compile-time Roslyn analyzer catches type mismatches between steps before you ever run the code.
+Each junction's output is stored by type in the train's `Memory` and handed to the next junction
+that asks for that type. `Trax.Core.Analyzers` fails the build when a junction needs a type nothing
+upstream produces.
 
-## Use Only What You Need
+The two attributes are optional. With them, that train is also this:
 
-Trax is a stack of independent layers. Each one is a standalone package that builds on the one below it. **You stop at whatever layer solves your problem.**
-
-```
-dotnet add package Trax.Core            # Just pipelines — no DI, no database, no infrastructure
-dotnet add package Trax.Effect          # + execution logging, DI, pluggable storage
-dotnet add package Trax.Mediator        # + decoupled dispatch (callers don't know which train runs)
-dotnet add package Trax.Scheduler       # + cron schedules, retries, dead-letter queues
-dotnet add package Trax.Dashboard       # + Blazor monitoring UI that mounts into your app
-```
-
-### Trax.Core — Type-safe pipelines
-
-You have a sequence of steps and you want them composed with type safety and automatic error propagation. That's it. No database. No DI container. Just `Activate -> Chain -> Resolve`.
-
-Good for: validation pipelines, data transformations, CLI tools, anywhere you'd write nested try/catch.
-
-```bash
-dotnet add package Trax.Core
+```graphql
+mutation {
+  dispatch {
+    createUser(input: { email: "a@b.com", name: "Ada" }, mode: QUEUE) {
+      externalId
+      workQueueId
+    }
+  }
+}
 ```
 
-```csharp
-var result = await train.Run(input); // Either<Exception, TOutput>
-```
-
-### Trax.Effect — Execution logging and DI
-
-Wraps every pipeline run with persistent metadata — state, timing, inputs, outputs, errors. Steps are resolved from your DI container. Pick a storage provider and every execution becomes a queryable record.
-
-Good for: web APIs, services where you need to know what ran and why it failed.
-
-```bash
-dotnet add package Trax.Effect
-dotnet add package Trax.Effect.Data.Postgres  # or Trax.Effect.Data.InMemory
-```
-
-```csharp
-builder.Services.AddTrax(trax =>
-    trax.AddEffects(effects =>
-        effects.UsePostgres(connectionString)
-    )
-);
-```
-
-### Trax.Mediator — Decoupled dispatch
-
-Your controller or parent pipeline shouldn't reference concrete train types. `TrainBus` scans your assemblies, builds an input-to-train mapping, and dispatches by input type.
-
-Good for: larger apps where multiple callers trigger trains, or where trains trigger other trains.
-
-```bash
-dotnet add package Trax.Mediator
-```
-
-```csharp
-builder.Services.AddTrax(trax =>
-    trax.AddEffects(effects =>
-            effects.UsePostgres(connectionString)
-        )
-        .AddMediator(typeof(Program).Assembly)
-);
-
-// In a controller or another train:
-var user = await trainBus.Send<CreateUserRequest, User>(request);
-```
-
-### Trax.Scheduler — Background job scheduling
-
-Cron-based and interval-based scheduling with retries, dead-letter handling, and dependent jobs. Every scheduled run is a normal pipeline execution — same logging, same visibility, same dashboard.
-
-Good for: recurring jobs, ETL pipelines, nightly reports, periodic cleanup — anywhere you'd reach for Hangfire or Quartz.
-
-```bash
-dotnet add package Trax.Scheduler
-```
-
-### Trax.Dashboard — Monitoring UI
-
-A Blazor Server dashboard that mounts directly into your existing ASP.NET Core app. No separate deployment. Browse executions, inspect failures, view schedules, toggle effect providers at runtime.
-
-Good for: any app using Trax.Effect that needs operational visibility without building custom admin pages.
-
-```bash
-dotnet add package Trax.Dashboard
-```
-
-```csharp
-builder.Services.AddTraxDashboard();
-// ...
-app.UseTraxDashboard();
-// Dashboard available at /trax
-```
-
-## Quick Start
-
-The fastest way to get a full project with scheduling and the dashboard:
-
-```bash
-dotnet new install Trax.Samples.Templates
-dotnet new trax-server -n MyApp
-```
+`mode: RUN` executes it and returns the output; `QUEUE` hands it to the scheduler. Either way the
+run is recorded.
 
 ## Packages
 
-| Package | Purpose |
-|---------|---------|
-| [Trax.Core](https://github.com/TraxSharp/Trax.Core) | Trains, steps, Memory, error propagation, compile-time analyzer |
-| [Trax.Effect](https://github.com/TraxSharp/Trax.Effect) | `ServiceTrain`, execution metadata, pluggable effect providers, DI |
-| [Trax.Effect.Data.Postgres](https://github.com/TraxSharp/Trax.Effect) | PostgreSQL storage provider |
-| [Trax.Effect.Data.InMemory](https://github.com/TraxSharp/Trax.Effect) | In-memory storage provider (dev/testing) |
-| [Trax.Mediator](https://github.com/TraxSharp/Trax.Mediator) | `TrainBus` — route inputs to trains by type |
-| [Trax.Scheduler](https://github.com/TraxSharp/Trax.Scheduler) | Manifest-based scheduling, retries, dead-letter handling |
-| [Trax.Api.GraphQL](https://github.com/TraxSharp/Trax.Api) | GraphQL API layer for train operations |
-| [Trax.Dashboard](https://github.com/TraxSharp/Trax.Dashboard) | Blazor Server monitoring UI |
-| [Trax.Samples](https://github.com/TraxSharp/Trax.Samples) | Sample apps and `dotnet new trax-server` template |
+| Package | Adds |
+|---|---|
+| `Trax.Core` | Trains, junctions, Memory, the analyzer |
+| `Trax.Effect` | DI-resolved junctions, persisted execution records |
+| `Trax.Mediator` | `TrainBus`: dispatch by input type instead of naming a train |
+| `Trax.Scheduler` | Manifests, timetables, retries, dead letters, job dependencies |
+| `Trax.Api.GraphQL` | The HotChocolate schema built from your trains and entities |
+| `Trax.Dashboard` | Blazor Server operations UI, mounted at `/trax` |
+
+Persistence is `Trax.Effect.Data.Postgres`, `.Sqlite` or `.InMemory`.
+
+## GraphQL
+
+`[TraxQuery]` and `[TraxMutation]` put a train on the schema; the input record becomes the field's
+arguments. `[TraxQueryModel]` on an EF Core entity exposes the table with cursor pagination,
+filtering, sorting and projection. Relationships across schemas resolve through batched DataLoaders.
+`AddTraxGraphQL()` registers all of it; `UsePersistedOperations()` restricts the server to an
+approved operation list.
+
+Auth is `Trax.Api.Auth` plus a scheme: API key, JWT, Cognito or OIDC. `[TraxAuthorize]` takes
+policies and roles and works on trains and on entities, including when an entity is reached through
+a navigation property. A surface with neither `[TraxAuthorize]` nor `[TraxAllowAnonymous]` fails at
+startup with the offending types named, which keeps an ungated endpoint from reaching production by
+accident.
+
+## Scheduling
+
+A manifest records which train runs, on what schedule, with what input, and how it retries.
+Schedules are 6-field cron (second granularity) or helpers like `Every.Minutes(5)` and
+`Cron.Daily(hour: 3)`. `Exclude.DaysOfWeek()`, `Exclude.Dates()`, `Exclude.DateRange()` and
+`Exclude.TimeWindow()` skip weekends, holidays and maintenance windows without logging a misfire.
+Retries write new rows rather than mutating old ones; jobs that exhaust them go to the dead letter
+queue. Manifests can depend on other manifests.
+
+## Running trains elsewhere
+
+The scheduler dispatches and executes in-process by default. One call moves execution:
+
+| Call | Where queued trains run |
+|---|---|
+| `UseRemoteWorkers()` | an HTTP endpoint you host |
+| `UseSqsWorkers()` | Lambda, fed by SQS |
+| `UseLambdaWorkers()` | Lambda, invoked directly |
+
+`UseRemoteRun()` and `UseLambdaRun()` do the same for on-demand runs, so an API box can serve
+`mode: RUN` without hosting the train code. Postgres holds manifests, metadata and the work queue in
+every topology; the trains themselves are unchanged.
+
+## Execution records
+
+Every run writes a row: state, start and end, serialized input and output, the junction that failed,
+its exception and stack trace, the parent run, and the host. Host environment is detected at startup
+(Lambda, ECS, Kubernetes, Azure App Service, or a plain server), so a metadata row tells you which
+machine executed it.
+
+`Trax.Dashboard` reads those rows and adds the operational controls: cancel a run from another
+server, see which junction a run is on, set per-group concurrency caps and dispatch priority, toggle
+effect providers at runtime.
+
+## Also in the box
+
+- **State machines.** `Trax.Effect.StateMachine` holds a multi-step flow as a snapshot that a C#
+  backend and a TypeScript client both understand. Every operation returns a typed result instead of
+  throwing, and an instance rebuilds from stored JSON. Both engines run the same conformance fixtures.
+- **Real-time.** SignalR and RabbitMQ broadcaster sinks, plus `[TraxBroadcast]` for the built-in
+  `onTrainCompleted` subscription.
+- **Architecture guards.** The `*.Testing` packages ship the conventions as NUnit base fixtures with
+  the tests already written; you supply configuration.
+- **CLI.** `trax generate` scaffolds trains from a GraphQL SDL or an OpenAPI spec. `trax machine`
+  generates and checks state-machine artifacts.
+
+## Start
+
+```bash
+dotnet new install Trax.Samples.Templates
+dotnet new trax-scheduler -n MyApp    # scheduler + dashboard
+dotnet new trax-api -n MyApp.Api      # GraphQL API
+```
+
+Or `dotnet add package Trax.Core` and write a train.
+[Getting Started](https://traxsharp.net/docs/getting-started) walks one example from Core-only to
+the full stack. There are inlay-hint extensions for
+[VS Code](https://marketplace.visualstudio.com/items?itemName=Trax.Core.trax-hints) and Rider that
+show `TIn -> TOut` on every link in a chain.
+
+## Repositories
+
+| Repo | Contents |
+|---|---|
+| [Trax.Core](https://github.com/TraxSharp/Trax.Core) | Trains, junctions, Memory, the analyzer, the IDE plugins |
+| [Trax.Effect](https://github.com/TraxSharp/Trax.Effect) | `ServiceTrain`, metadata, data and effect providers, broadcasters, state machines |
+| [Trax.Mediator](https://github.com/TraxSharp/Trax.Mediator) | `TrainBus`, train discovery, concurrency limiting, authorization |
+| [Trax.Scheduler](https://github.com/TraxSharp/Trax.Scheduler) | Manifests, timetables, dead letters, SQS and Lambda runners |
+| [Trax.Api](https://github.com/TraxSharp/Trax.Api) | GraphQL, auth, audit, persisted operations, typed clients |
+| [Trax.Dashboard](https://github.com/TraxSharp/Trax.Dashboard) | The Blazor Server UI |
+| [Trax.Cli](https://github.com/TraxSharp/Trax.Cli) | The `trax` global tool |
+| [Trax.Samples](https://github.com/TraxSharp/Trax.Samples) | Samples and the `dotnet new` templates |
+| [Trax.Docs](https://github.com/TraxSharp/Trax.Docs) | Documentation and decision records |
 | [Trax.Website](https://github.com/TraxSharp/Trax.Website) | Source for [traxsharp.net](https://traxsharp.net) |
 
-All packages are on [NuGet](https://www.nuget.org/packages?q=Trax.Core).
+Packages are on [NuGet](https://www.nuget.org/profiles/TraxSharp), versioned per repo by Semantic
+Release.
+
+The samples cover deployment shapes: one process, a split API and scheduler, distributed workers
+polling a job table, ephemeral runners over HTTP, a real-time chat service, and a multi-schema
+library app that consumes every architecture guard.
 
 ## Documentation
 
-[traxsharp.net/docs](https://traxsharp.net/docs)
+- [Getting Started](https://traxsharp.net/docs/getting-started)
+- [SDK Reference](https://traxsharp.net/docs/sdk-reference)
+- [Trax vs Quartz.NET vs Hangfire](https://traxsharp.net/docs/reference/comparison)
+- [Benchmarks](https://traxsharp.net/docs/reference/benchmarks) — what a train costs over a plain method call
+- [API Security](https://traxsharp.net/docs/api-security), [Supply Chain Security](https://traxsharp.net/docs/supply-chain-security)
+- [Migrating from ChainSharp](https://traxsharp.net/docs/reference/migration)
 
 ## License
 
-MIT
+MIT.
 
 ## Trademark & Brand Notice
 
-Trax is an open-source .NET framework provided by TraxSharp. This project is an independent community effort and is not affiliated with, sponsored by, or endorsed by the Utah Transit Authority, Trax Retail, or any other entity using the "Trax" name in other industries.
+Trax is an open-source .NET framework provided by TraxSharp. This project is an independent
+community effort and is not affiliated with, sponsored by, or endorsed by the Utah Transit
+Authority, Trax Retail, or any other entity using the "Trax" name in other industries.
