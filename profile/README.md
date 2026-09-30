@@ -88,29 +88,6 @@ do not change.
 | [Trax.Docs](https://github.com/TraxSharp/Trax.Docs) | The documentation at [traxsharp.net/docs](https://traxsharp.net/docs), and the decision records behind cross-repo rules |
 | [Trax.Website](https://github.com/TraxSharp/Trax.Website) | Source for [traxsharp.net](https://traxsharp.net) |
 
-## Where Trax stops
-
-What it does not do today, so you can decide before you install it.
-
-- **A crash restarts the train.** If a process dies halfway through a run, the run is marked failed and a scheduled
-  train is retried from its first junction. Junctions that call other systems should be safe to repeat. Resuming at
-  the step that failed is being built.
-- **Postgres in production.** The scheduler coordinates workers with Postgres row locks and advisory locks. SQLite
-  works for a single process and in-memory storage for tests. There is no SQL Server or MySQL provider.
-- **Not a message bus.** Trax runs work and records it. It does not carry messages between services through a broker
-  or coordinate sagas across them.
-- **One language, one database.** Trains are C#, and one Postgres database coordinates them.
-- **No tracing export yet.** Runs are recorded in the database and logged through `ILogger`, not emitted as
-  OpenTelemetry spans.
-
-## Documentation
-
-- [Getting started](https://traxsharp.net/docs/getting-started) and the [templates](https://traxsharp.net/docs/reference/templates)
-- [SDK reference](https://traxsharp.net/docs/sdk-reference)
-- [Running trains on other machines](https://traxsharp.net/docs/scheduler/remote-execution)
-- [How Trax compares](https://traxsharp.net/docs/reference/comparison) and [what a train costs](https://traxsharp.net/docs/reference/benchmarks)
-- [API security](https://traxsharp.net/docs/api-security) and [supply-chain security](https://traxsharp.net/docs/supply-chain-security)
-
 ## License
 
 MIT, in every repo. There is no commercial edition, and there will not be one.
