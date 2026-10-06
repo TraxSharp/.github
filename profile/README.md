@@ -4,7 +4,7 @@
 
 MIT licensed, with no commercial edition. .NET 10.
 [Docs](https://traxsharp.net/docs) · [Getting started](https://traxsharp.net/docs/getting-started) ·
-[Samples](https://github.com/TraxSharp/Trax.Samples) · [NuGet](https://www.nuget.org/profiles/Theauxm)
+[Repository](https://github.com/TraxSharp/Trax) · [Samples](https://github.com/TraxSharp/Trax/tree/main/Trax.Samples) · [NuGet](https://www.nuget.org/profiles/Theauxm)
 
 A **train** is a typed pipeline of small steps called **junctions**. Each junction takes a typed input and returns a
 typed output. When one throws, the rest are skipped and the train returns the exception, so the route reads top to
@@ -28,8 +28,7 @@ provided.
 
 ## One train, four ways to run it
 
-Nothing in the train knows how it will be run. Adapted from the
-[game server sample](https://github.com/TraxSharp/Trax.Samples/tree/main/samples/LocalWorkers):
+Nothing in the train knows how it will be run.
 
 | | How | Package |
 |---|---|---|
@@ -55,7 +54,7 @@ ManifestId        14  (leaderboard-na)
 HostName          worker-2
 ```
 
-When a job fails overnight, you open the run and read what happened. [Trax.Dashboard](https://github.com/TraxSharp/Trax.Dashboard)
+When a job fails overnight, you open the run and read what happened. [Trax.Dashboard](https://github.com/TraxSharp/Trax/tree/main/Trax.Dashboard)
 shows the same rows, and so does a SQL query. [What gets recorded](https://traxsharp.net/docs/effect/metadata).
 
 ## Start
@@ -70,27 +69,32 @@ dotnet new trax-hub -n MyApp.Hub      # both in one process
 Or `dotnet add package Trax.Core` and write a train. [Getting started](https://traxsharp.net/docs/getting-started)
 takes one example from Core alone to the full stack.
 
-## Repositories
+## The repository
 
-Each code repo is one layer and depends only on repos above it in this table. Take the layers you need; the trains you already wrote
-do not change.
+All of Trax lives in one repository, [TraxSharp/Trax](https://github.com/TraxSharp/Trax), one folder per layer. Every
+package releases at one version from it. Each .NET folder depends only on folders above it in this table; take the
+layers you need, and the trains you already wrote do not change.
 
-| Repo | What it adds |
+| Folder | What it adds |
 |---|---|
-| [Trax.Core](https://github.com/TraxSharp/Trax.Core) | Trains, junctions and the chain, with no database and no DI container |
-| [Trax.Effect](https://github.com/TraxSharp/Trax.Effect) | A recorded run for every execution (Postgres, SQLite or in memory), DI, effect providers, the state-machine engine |
-| [Trax.Mediator](https://github.com/TraxSharp/Trax.Mediator) | The train bus: run a train by handing over its input, with every chain checked at startup |
-| [Trax.Scheduler](https://github.com/TraxSharp/Trax.Scheduler) | Cron and interval schedules, retries, dead letters, and workers on other machines or in Lambda |
-| [Trax.Api](https://github.com/TraxSharp/Trax.Api) | GraphQL generated from your trains, with authentication, audit and typed clients |
-| [Trax.Dashboard](https://github.com/TraxSharp/Trax.Dashboard) | A Blazor Server UI for runs, schedules and dead letters, mounted in your app |
-| [Trax.Cli](https://github.com/TraxSharp/Trax.Cli) | The `trax` tool: scaffold a hub and trains from an OpenAPI or GraphQL schema, and state-machine codegen |
-| [Trax.Samples](https://github.com/TraxSharp/Trax.Samples) | **Start here.** Complete sample apps, and the `trax-api`, `trax-scheduler` and `trax-hub` templates |
-| [Trax.Docs](https://github.com/TraxSharp/Trax.Docs) | The documentation at [traxsharp.net/docs](https://traxsharp.net/docs), and the decision records behind cross-repo rules |
-| [Trax.Website](https://github.com/TraxSharp/Trax.Website) | Source for [traxsharp.net](https://traxsharp.net) |
+| [Trax.Core](https://github.com/TraxSharp/Trax/tree/main/Trax.Core) | Trains, junctions and the chain, with no database and no DI container |
+| [Trax.Effect](https://github.com/TraxSharp/Trax/tree/main/Trax.Effect) | A recorded run for every execution (Postgres, SQLite or in memory), DI, effect providers, the state-machine engine |
+| [Trax.Mediator](https://github.com/TraxSharp/Trax/tree/main/Trax.Mediator) | The train bus: run a train by handing over its input, with every chain checked at startup |
+| [Trax.Scheduler](https://github.com/TraxSharp/Trax/tree/main/Trax.Scheduler) | Cron and interval schedules, retries, dead letters, and workers on other machines or in Lambda |
+| [Trax.Api](https://github.com/TraxSharp/Trax/tree/main/Trax.Api) | GraphQL generated from your trains, with authentication, audit and typed clients |
+| [Trax.Dashboard](https://github.com/TraxSharp/Trax/tree/main/Trax.Dashboard) | A Blazor Server UI for runs, schedules and dead letters, mounted in your app |
+| [Trax.Cli](https://github.com/TraxSharp/Trax/tree/main/Trax.Cli) | The `trax` tool: scaffold a hub and trains from an OpenAPI or GraphQL schema, and state-machine codegen |
+| [Trax.Samples](https://github.com/TraxSharp/Trax/tree/main/Trax.Samples) | **Start here.** Complete sample apps, and the `trax-api`, `trax-scheduler` and `trax-hub` templates |
+| [Trax.Api.StateMachine](https://github.com/TraxSharp/Trax/tree/main/Trax.Api.StateMachine) | `@trax/state-machine`, the TypeScript twin of the state-machine engine |
+| [Trax.Docs](https://github.com/TraxSharp/Trax/tree/main/Trax.Docs) | The documentation at [traxsharp.net/docs](https://traxsharp.net/docs), and the decision records |
+| [Trax.Website](https://github.com/TraxSharp/Trax/tree/main/Trax.Website) | Source for [traxsharp.net](https://traxsharp.net) |
+
+Trax used to be split into one repository per layer (`TraxSharp/Trax.Core` and the rest). Those are archived; their
+history is in TraxSharp/Trax, under each folder.
 
 ## License
 
-MIT, in every repo. There is no commercial edition, and there will not be one.
+MIT. There is no commercial edition, and there will not be one.
 
 Trax is an independent open-source project and is not affiliated with the Utah Transit Authority, Trax Retail, or any
 other organization using the Trax name.
